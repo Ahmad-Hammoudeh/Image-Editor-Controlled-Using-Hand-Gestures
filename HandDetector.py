@@ -5,9 +5,14 @@ import keyboard
 
 
 class HandDetector:
-    def __init__(self, frameWidth, frameHeight):
-        self.frameWidth = frameWidth
-        self.frameHeight = frameHeight
+    def __init__(self, cap):
+        self.cap = cap
+        self.frameWidth = int(self.cap.get(cv.CAP_PROP_FRAME_WIDTH))
+        self.frameHeight = int(self.cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+
+        self.referenceFrame = np.full((self.frameHeight, self.frameWidth, 1), 0, np.uint8)
+        self.backGroundThread = threading.Thread(target=self.takeBackgroundFrame)
+        self.backGroundThread.start()
 
         self.isCalibrated = False
         self.doCalibration = False
@@ -21,42 +26,50 @@ class HandDetector:
     def run(self, originalFrame):
         frame = np.copy(originalFrame)
 
+        frame = self.clearBackground(frame)
+
         if self.doCalibration:
-            self.calThreshold(originalFrame)
+            self.calThreshold(frame)
             self.doCalibration = False
             self.isCalibrated = True
 
-        skinMask = self.generateSkinMask(frame)
+        frame = self.generateSkinMask(frame)
 
-        if self.isCalibrated:
-            pass
-        else:
-            self.drawSamplingRecs(frame)
+        if not self.isCalibrated:
+            self.drawSamplingRecs(originalFrame)
 
-        return frame, skinMask
+        self.handArea(frame, originalFrame)
+        frame = self.drawHandContour(frame)
+
+        return frame, originalFrame
 
     def generateSkinMask(self, frame):
         hsvFrame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-
         mask = cv.inRange(hsvFrame, (self.hueLow, self.satLow, self.valueLow),
                           (self.hueHigh, self.satHigh, self.valueHigh))
 
         # Opening using 'ellipse shape' array
-        ellipse = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
+        ellipse = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
         mask = cv.morphologyEx(mask, cv.MORPH_OPEN, ellipse)
 
         # Dilation
         kernel = np.ones((5, 5), np.uint8)
-        mask = cv.dilate(mask, kernel, iterations=1)
+        mask = cv.dilate(mask, kernel, iterations=2)
 
-        return mask
+        mask = cv.cvtColor(mask, cv.COLOR_GRAY2BGR)
+
+        return cv.bitwise_and(frame, mask)
 
     def calibrationTrigger(self):
-        keyboard.wait("c")
-        self.doCalibration = True
+        while True:
+            keyboard.wait("c")
+            self.doCalibration = True
+            keyboard.wait("c")
+            self.doCalibration = False
+            self.isCalibrated = False
 
     def calThreshold(self, frame):
-        samplingRec1 = frame[int(self.frameHeight * 0.35):int(self.frameHeight * 0.35) + 20,
+        samplingRec1 = frame[int(self.frameHeight * 0.35) : int(self.frameHeight * 0.35) + 20,
                        int(self.frameWidth * 0.75):int(self.frameWidth * 0.75) + 20]
 
         # Convert to HSV
@@ -67,7 +80,7 @@ class HandDetector:
 
         samplingRec2 = cv.cvtColor(samplingRec2, cv.COLOR_BGR2HSV)
 
-        offsetLowThreshold = 25
+        offsetLowThreshold = 80
         offsetHighThreshold = 30
         # offsetLowThreshold = 80
         # offsetHighThreshold = 30
@@ -87,6 +100,54 @@ class HandDetector:
         print(self.hueLow, self.hueHigh)
         print(self.satLow, self.satHigh)
         print(self.valueLow, self.valueHigh)
+
+    def clearBackground(self, frame):
+        thresholdOffset = 25
+        grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        dif = cv.absdiff(grayFrame, self.referenceFrame)
+        ret, dif = cv.threshold(dif, thresholdOffset + 1, 255, cv.THRESH_BINARY)
+
+        ellipse = cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3))
+        dif = cv.morphologyEx(dif, cv.MORPH_OPEN, ellipse)
+
+        kernel = np.ones((5, 5), np.uint8)
+        backgroundFrame = cv.dilate(dif, kernel, iterations=3)
+        backgroundFrame = cv.cvtColor(backgroundFrame, cv.COLOR_GRAY2BGR)
+        #
+        # backgroundFrame = cv.cvtColor(dif, cv.COLOR_GRAY2BGR)
+        return cv.bitwise_and(frame, backgroundFrame)
+
+    def takeBackgroundFrame(self):
+        while True:
+            keyboard.wait("b")
+            ret, self.referenceFrame = self.cap.read()
+            self.referenceFrame = cv.flip(self.referenceFrame, 1)
+            # self.referenceFrame = cv.GaussianBlur(self.referenceFrame, (5, 5), 50)
+            self.referenceFrame = cv.cvtColor(self.referenceFrame, cv.COLOR_BGR2GRAY)
+
+    def drawHandContour(self, frame):
+        frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+        gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
+        blurred = cv.bilateralFilter(gray, 9, 75, 75)
+        # edges = cv.Canny(blurred, 10, 100)
+        contours, hierarchy = cv.findContours(blurred, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        maxContour = []
+        if len(contours) > 0:
+            maxContour = max(contours, key=cv.contourArea)
+        cv.drawContours(frame, maxContour, -1, (0, 255, 0), 2)
+        # cv.drawContours(frame, contours, -1, (0, 255, 0), 2)
+
+        return cv.cvtColor(frame, cv.COLOR_RGB2BGR)
+
+    def handArea(self, frame, originalFrame):
+        pt1 = (int(self.frameWidth * 0.55), 0)
+        pt2 = (int(self.frameWidth * 0.55), self.frameHeight)
+        pt1 = tuple([int(round(pt1[0])), int(round(pt1[1]))])
+        pt2 = tuple([int(round(pt2[0])), int(round(pt2[1]))])
+        cv.line(originalFrame, pt1, pt2, (0, 0, 255), 2)
+
+        frame[:, 0:int(self.frameWidth * 0.60) - 1] = 0
 
     def drawSamplingRecs(self, frame):
         start_point1, end_point1, start_point2, end_point2 = self.samplingRecPoints()

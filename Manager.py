@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 from HandDetector import HandDetector
+from HandRecognition import HandRecognition
 from Preprocessor import Preprocessor
 
 class Manager:
@@ -10,6 +11,7 @@ class Manager:
         self.frameHeight = self.cap.get(cv. CAP_PROP_FRAME_HEIGHT)
         self.handDetector = HandDetector(self.cap)
         self.preprocessor = Preprocessor()
+        self.handReco = HandRecognition()
 
     def run(self):
 
@@ -17,9 +19,13 @@ class Manager:
             ret, frame = self.cap.read()
 
             frame = self.preprocessor.run(frame)
-            handFrame, editedVideoFrame = self.handDetector.run(frame)
-            cv.imshow("video", editedVideoFrame)
-            cv.imshow("hand detection", handFrame)
+            handPixels, DFrame, handContour = self.handDetector.run(frame)
+
+            self.handReco.run(handPixels, frame, handContour)
+
+            cv.imshow("video", frame)
+            cv.imshow("hand contour", DFrame)
+            cv.imshow("hand", handPixels)
 
             k = cv.waitKey(30) & 0xff
             if k == 27:

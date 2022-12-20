@@ -21,13 +21,16 @@ class Manager:
             frame = self.preprocessor.run(frame)
             handPixels, DFrame, handContour = self.handDetector.run(frame)
 
-            self.handReco.run(handPixels, frame, handContour)
+            handCenterX, handCenterY, fingerCount, fingersLandMarks =\
+                self.handReco.run(handPixels, frame, handContour)
 
             cv.imshow("video", frame)
             cv.imshow("hand contour", DFrame)
-            cv.imshow("hand", handPixels)
+            # cv.imshow("hand", handPixels)
 
             k = cv.waitKey(30) & 0xff
             if k == 27:
                 break
 
+        cv.destroyAllWindows()
+        self.cap.release()

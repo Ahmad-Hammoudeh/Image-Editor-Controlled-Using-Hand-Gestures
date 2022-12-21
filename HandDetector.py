@@ -185,10 +185,12 @@ class HandDetector:
     def takeBackgroundFrame1(self):
         while True:
             keyboard.wait("b")
-            ret, self.referenceFrame = self.cap.read()
-            self.referenceFrame = cv.flip(self.referenceFrame, 1)
+            ret, tempFrame = self.cap.read()
+            tempFrame = cv.flip(tempFrame, 1)
             # self.referenceFrame = cv.GaussianBlur(self.referenceFrame, (5, 5), 75)
-            self.referenceFrame = cv.cvtColor(self.referenceFrame, cv.COLOR_BGR2GRAY)
+            tempFrame = cv.cvtColor(tempFrame, cv.COLOR_BGR2GRAY)
+
+            self.referenceFrame = tempFrame
 
     def drawHandContour(self, frame):
         frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)

@@ -29,8 +29,8 @@ class HandRecognition:
             # cv.drawContours(frame, approx, -1, (0, 255, 0), 2)
 
             h, w, cx, cy, frame = self.boundingRectangle(hull, frame.copy(),
-                                                         drawRec=True,
-                                                         drawHandCenter=True)
+                                                         drawRec=False,
+                                                         drawHandCenter=False)
             # x =
             areaHull = cv.contourArea(hull)
             areaHandContour = cv.contourArea(handContour)
@@ -65,7 +65,8 @@ class HandRecognition:
 
             hull = cv.convexHull(approx, returnPoints=False)
             defects = cv.convexityDefects(approx, hull)
-            # lastFinger = None
+            lastFinger = None
+            test = set()
 
             for i in range(defects.shape[0]):
                 s, e, f, d = defects[i, 0]
@@ -90,8 +91,8 @@ class HandRecognition:
                 if abs(angle) < 90 and d > 30 and end[1] < cy - 5 and start[1] < cy - 5:
                     fingerCount += 1
                     fingersLandMarks.append(end)
-                    # if lastFinger is None:
-                    #     lastFinger = start
+                    test.add(end)
+                    test.add(start)
 
                     cv.circle(frame, end, 5, [0, 0, 255], -1)
                     cv.line(frame, start, far, [0, 255, 0], 2)
@@ -102,11 +103,22 @@ class HandRecognition:
             fingerCount += 1
             font = cv.FONT_HERSHEY_SIMPLEX
 
-            # if lastFinger is not None:
-            #     cv.circle(frame, lastFinger, 5, [0, 0, 255], -1)
+            if len(test) > 1:
+                result = (0, 0)
+                for point in test:
+                    if result[0] < point[0]:
+                        result = point
+
+                lastFinger = result
+
+            if lastFinger is not None:
+                cv.circle(frame, lastFinger, 5, [0, 0, 255], -1)
+                fingersLandMarks.append(lastFinger)
 
             if fingerCount == 1:
                 if areaHandContour < 2000:
+                    fingerCount = 0
+                    fingersLandMarks = []
                     cv.putText(frame, 'Put hand in the box', (0, 50), font, 1, (255, 0, 0), 2, cv.LINE_AA)
                 else:
                     pointsList = self.convertHullToList(copyHull)
@@ -119,9 +131,11 @@ class HandRecognition:
                             mx = dis
 
                     if mx > 130:
+                        fingersLandMarks.append(res)
                         cv.circle(frame, res, 5, [0, 0, 255], -1)
                         cv.putText(frame, '1', (0, 50), font, 2, (255, 0, 0), 2, cv.LINE_AA)
                     else:
+                        fingerCount = 0
                         cv.putText(frame, '0', (0, 50), font, 2, (255, 0, 0), 2, cv.LINE_AA)
 
             elif fingerCount == 2:
@@ -139,13 +153,11 @@ class HandRecognition:
             elif fingerCount == 6:
                 pass
 
-            cv.imshow('frame', frame)
-
-            return cx, cy, fingerCount, fingersLandMarks
+            return frame, cx, cy, fingerCount, fingersLandMarks
 
         except Exception as e:
             # logging.error(traceback.format_exc())
-            return None, None, None, None
+            return frame, None, None, None, None
             pass
 
     def compactOnMedian(self, points, maxNebDistance):

@@ -58,7 +58,6 @@ class StateProcessor:
             self.tickCheck = time.time()
             return False
 
-
         if self.fiCntCheck != curFingerCnt:
             self.fiCntCheck = curFingerCnt
             self.tickCheck = time.time()

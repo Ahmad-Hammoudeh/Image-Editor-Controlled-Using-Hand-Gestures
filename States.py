@@ -7,3 +7,4 @@ class States(enum.Enum):
     Rotate = 2
     Scale = 3
     Brush = 4
+    Warp = 5
